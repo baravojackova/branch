@@ -1,0 +1,24 @@
+!01 MESH Branch - scan-based solid model, meshing of imported volume (GUI needed) [Pa,N,m,kg/m3]
+!===============================================================================================
+!As input is used imported db file. 
+!
+!------------------loading scan from WorkBench (db file)
+!
+resume,'scan','db',,0,0  	!define the path to file 
+!
+param.mac		!loading of parameters
+!
+!------------------meshing
+!
+allsel,all			!select all
+et,1,187			!3D tetra 10-nodes
+esize,e_size 			!setting size is influenced by scan quality
+mshape,1,3D			!triangle shaped elements, 3D
+vmesh,all			!mesh all volumes - volu1
+!eplot				!plot elements
+*get,esum,elem,0,count		!save element count
+!
+parsav,all,param,txt		!save parameters
+save,scanmeshed,db		!save db
+!
+/eof

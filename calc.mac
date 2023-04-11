@@ -1,0 +1,683 @@
+!05 CALC Branch - scan-based solid model, loads and solution NO GUI needed [Pa,N,m,kg,kg/m3]
+!===========================================================================================
+!assignment of boundary condition, solution and post-processing
+!LOADING SCENARIOS: 
+!1. single-point vertical loading
+!2. single-point horizontal loading
+!3. EP diameter
+!4. EP mass
+!5. EP area
+!6. EP diameter sc - choose which diameter to use
+!7. ACEL
+!8. ACEL end EP diameter sc
+!
+!------------------loading file db and parameters
+!
+resume,'main_dof','db',,0,0 
+!
+param.mac				!loading of parameters
+!
+!===============================BOUNDARY CONDITIONS==================================
+!----------------extract diameters for calculation of force distribution - scenario 6 and 8-------
+!
+*dim,E_SYS_SC,array,np_2,2,1 			!create table for esys numbers
+*dim,FORCE_DIAM,array,np_2+1,4,1 		!create table for extracted values
+!
+*do,i,1,np_2
+ E_SYS_SC(i,1)=(i*100)+1			!top of the side branch
+ E_SYS_SC(i,2)=(i*100)+2			!2nd component from top
+ !
+ !---------------top of side branch - 1st component
+ csys,E_SYS_SC(i,1)
+ esel,s,esys,,E_SYS_SC(i,1)			!select elements with attributed esys
+ *get,e_mx,elem,0,num,max			!get max number of element
+ *if,e_mx,eq,0,then				!if 0 write 0 in the table
+  FORCE_DIAM(i,1)=0
+ *else
+  esel,r,cent,z,0,4*e_size			!reselect elements in wide 4*e_size - eliminate border shape
+  nsle,s					!select attached nodes
+  ksln,s					!select attached k-points
+  j=1
+  *get,k_count,kp,0,count			!get kp count
+  *get,_num_kp_%j%,kp,0,num,min			!get kp lowest number
+  *if,_num_kp_%j%,eq,0,then
+   FORCE_DIAM(i,1)=0				!if there is no k-point the selection write 0
+   *else
+    _kpsum_locx_%j%=kx(_num_kp_%j%)  				!get location of kp_in x direction/radius
+    *do,j,2,k_count						
+     _num_kp_%j%=kpnext(_num_kp_%j-1%) 				!select next k-point
+     _kpsum_locx_%j%=_kpsum_locx_%j-1%+kx(_num_kp_%j%)		!add x location of next k-point
+    *enddo
+    !
+    FORCE_DIAM(i,1)=(_kpsum_locx_%j%/k_count)*2		!compute mean value of x location - radius*2
+  *endif
+ *endif
+ allsel,all
+ !
+ !---------------2nd component of side branch
+ csys,E_SYS_SC(i,2)
+ esel,s,esys,,E_SYS_SC(i,2)			!select elements with attributed esys
+ *get,e_mx,elem,0,num,max			!get max number of element
+ *if,e_mx,eq,0,then				!if 0 write 0 in the table
+  FORCE_DIAM(i,2)=0
+  *else
+   nsle,s					!select attached nodes
+   ksln,s					!select attached k-points
+   j=1
+   *get,k_count,kp,0,count			!get kp count
+   *get,_num_kp_%j%,kp,0,num,min		!get kp lowest number
+   *if,_num_kp_%j%,eq,0,then			!if 0 write 0 in the table
+    FORCE_DIAM(i,2)=0
+    *else
+     _kpsum_locx_%j%=kx(_num_kp_%j%)  				!get location of kp_in x direction/radius			
+     *do,j,2,k_count						!select next k-point		
+      _num_kp_%j%=kpnext(_num_kp_%j-1%) 	
+      _kpsum_locx_%j%=_kpsum_locx_%j-1%+kx(_num_kp_%j%)		!add x location of next k-point
+     *enddo
+     !
+     FORCE_DIAM(i,2)=(_kpsum_locx_%j%/k_count)*2		!compute mean value of x location - radius*2
+   *endif
+ *endif
+ allsel,all
+ !
+*enddo
+!
+!---------------compute diameter from the top of main axis and add as last to the table  
+n=n_main*na_sel
+cmsel,s,main_%n%
+*get,e_num,elem,0,num,min
+*get,e_sysmain1,elem,e_num,attr,esys  
+csys,e_sysmain1
+nsle,s
+ksln,s
+*get,kp_mxz,kp,0,mxloc,z
+*get,kp_mnz,kp,0,mnloc,z
+ksel,r,loc,z,kp_mnz,kp_mxz-(1*e_size)
+i=1
+*get,k_count,kp,0,count
+*get,_num_kp_%i%,kp,0,num,min
+_kpsum_locx_%i%=kx(_num_kp_%i%)  				
+*do,i,2,k_count						
+ _num_kp_%i%=kpnext(_num_kp_%i-1%) 
+ _kpsum_locx_%i%=_kpsum_locx_%i-1%+kx(_num_kp_%i%)
+*enddo
+!
+FORCE_DIAM(np_2+1,1)=(_kpsum_locx_%i%/k_count)*2
+allsel,all
+!
+!---------------compute diameter from the 2nd component from the top of main axis and add as last to the table  
+cmsel,s,main_%n-na_sel%
+*get,e_num,elem,0,num,min
+*get,e_sysmain2,elem,e_num,attr,esys  
+csys,e_sysmain2
+nsle,s
+ksln,s
+i=1
+*get,k_count,kp,0,count
+*get,_num_kp_%i%,kp,0,num,min
+_kpsum_locx_%i%=kx(_num_kp_%i%)  				
+*do,i,2,k_count						
+ _num_kp_%i%=kpnext(_num_kp_%i-1%) 
+ _kpsum_locx_%i%=_kpsum_locx_%i-1%+kx(_num_kp_%i%)
+*enddo
+FORCE_DIAM(np_2+1,2)=(_kpsum_locx_%i%/k_count)*2
+allsel,all
+!
+!   
+*vscfun,DIAM_1,sum,FORCE_DIAM(1,1)			!sum of diameters
+*vscfun,DIAM_2,sum,FORCE_DIAM(1,2)
+!
+!ratio for force distribution
+!
+*voper,FORCE_DIAM(1,3),FORCE_DIAM(1,1),div,DIAM_1	!column 3 - diameters form the top of side branches		
+*voper,FORCE_DIAM(1,4),FORCE_DIAM(1,2),div,DIAM_2	!column 4 - diameters from the 2nd component from top of side branches
+!   
+diam_sc.mac
+!----------------CREATE CSYS for DOF AND RSYS - EQUAL TO CAMERA POSITION--------------------------------
+!-----write dimensions of selected kp in local CSYS for appl. of boundary conditions
+!
+csys,bas_csys				!overall branch csys - cyl
+*get,an_k1x,kp,an_k1,loc,x		!an_k1 position of 1st branch base
+*get,an_k1y,kp,an_k1,loc,y		!for setting of initial position of rsys
+*get,an_k1z,kp,an_k1,loc,z
+allsel,all
+!
+csys,gr_csys				!csys near center of gravity
+*get,gr_kx,kp,gr_k,loc,x
+*get,gr_ky,kp,gr_k,loc,y
+*get,gr_kz,kp,gr_k,loc,z		!get position of selected kp in gr_csys
+allsel,all
+!
+!!!!Position of branch in csys can be run by cycle to find the best fit in position!!!!
+!
+n_run=0						!number of run possible use in the naming of result files
+*do,k,side_par(101,1),side_par(101,1),1		!position of first branch - from side_par(101,1)				
+ *do,l,alfa,alfa,1				!branch tilt
+  *do,m,beta,beta,1				!rotation of x axis - movement of whole branch caused by holder tilt
+   n_run=n_run+1
+   /prep7
+   allsel,all
+   csys,0
+   *if,n_run,gt,1,then
+    csdele,for_csys			!delete csys from previous cycle
+   *endif
+   wpcsys,1,bas_csys			!creation of csys for applying loads
+   wpoffs,,,an_k1z-an_dis		!offset of wp to anchorage point
+   wprota,an_k1y,0,0			!setting initial position of rsys - rotation of x to the position of 1st branch base
+   wprota,-k,0,0			!position of 1st side branch
+   wprota,0,0,-l			!rotation of z axis - tilt
+   wprota,-m,0,0			!rotation of x axis - movement of whole branch
+   !
+   for_csys=5e4				!csys = rsys; for force application
+   cswpla,for_csys,0
+   csys,for_csys
+   *get,for_csysx,cdsy,for_csys,loc,x			!get origin location for csys
+   *get,for_csysy,cdsy,for_csys,loc,y
+   *get,for_csysz,cdsy,for_csys,loc,z
+   !
+   *get,for_csysxy,cdsy,for_csys,ang,xy			!get rotation angle for csys
+   *get,for_csysyz,cdsy,for_csys,ang,yz
+   *get,for_csyszx,cdsy,for_csys,ang,zx
+   !
+   nrotat,all						!assignment of csys to all nodes
+   !eplot
+   !
+   !-------------CALCULATION of ACEL distribution to corresponds with global csys--------
+   csys,for_csys
+   *get,kp_acel01,kp,0,num,max
+   kp_acel01=kp_acel01+1
+   kp_acel02=kp_acel01+1			!for gravity - not used
+   kp_acel03=kp_acel02+1			!for side loading to volume of elements
+   k,kp_acel01,1,0,0				!create kp in x direction of csys for_csys
+   k,kp_acel02,0,0,0				!create kp in position of csys for_csys
+   k,kp_acel03,0,1,0				!create kp in position of csys for_csys
+   !
+   csys,0					
+   *get,kp_acel02x,kp,kp_acel02,loc,x		!get position in global csys
+   *get,kp_acel02y,kp,kp_acel02,loc,y
+   *get,kp_acel02z,kp,kp_acel02,loc,z
+   !
+   wpcsys,1,0						!return wp to global csys
+   wpoffs,kp_acel02x,kp_acel02y,kp_acel02z		!move wp to position of kp51e3 	
+   cswpla,51e3,0					!create cart.csys
+   csys,51e3				
+   *get,kp_acel01x,kp,kp_acel01,loc,x			!get location of kp5e4 in csys 51e3	
+   *get,kp_acel01y,kp,kp_acel01,loc,y
+   *get,kp_acel01z,kp,kp_acel01,loc,z
+   !
+   *afun,deg							!angles of kp_acel01 in csys 51e3
+   kp_acel01sum=sqrt(kp_acel01x**2+kp_acel01y**2+kp_acel01z**2)
+   kp_acel01_cosx=acos(kp_acel01x/kp_acel01sum)
+   kp_acel01_cosy=acos(kp_acel01y/kp_acel01sum)
+   kp_acel01_cosz=acos(kp_acel01z/kp_acel01sum)
+   !
+   ac_xcos=9.81*cos(kp_acel01_cosx)			!force distribution for acel (in global csys)
+   ac_ycos=9.81*cos(kp_acel01_cosy)
+   ac_zcos=9.81*cos(kp_acel01_cosz)
+   !
+   ac_cossum=sqrt(ac_xcos**2+ac_ycos**2+ac_zcos**2)	!control - sum of forces
+   !
+   csys,51e3				
+   *get,kp_acel03x,kp,kp_acel03,loc,x			!get location of kp5e4 in csys 51e3	
+   *get,kp_acel03y,kp,kp_acel03,loc,y
+   *get,kp_acel03z,kp,kp_acel03,loc,z
+   ! 
+   kp_acel03sum=sqrt(kp_acel03x**2+kp_acel03y**2+kp_acel03z**2)
+   kp_acel03_cosx=acos(kp_acel03x/kp_acel03sum)
+   kp_acel03_cosy=acos(kp_acel03y/kp_acel03sum)
+   kp_acel03_cosz=acos(kp_acel03z/kp_acel03sum)
+   wpcsys,1,for_csys
+   !
+   !---------------SELECTION FOR ANCHORAGE---------------------------------------
+   !*************CREATE COMPONENTS for DOF and CONTACT**************
+   !
+   csys,for_csys
+   *get,kp_orient,kp,0,num,max				!create kp for orientation
+   kp_orient=kp_orient+1
+   k,kp_orient,1,0,-100	
+   !
+   !------selection of anchorage points at the possition of first marker
+   csys,bas_csys
+   ksel,s,loc,z,((an_k1z-an_dis)+an_dis1)-(0.035),(an_k1z-an_dis)+an_dis1	!select at the upper edge of tape of first marker adn wide of the tape
+   !ksel,r,loc,x,0,r_base1e4+(r_base1e4*0.8)					!reselect radius if needed
+   nslk,s									!select attached nodes
+   cm,anchor_side,node,,1							!create component
+   allsel,all
+   wpcsys,1,for_csys								!return wp to for_csys
+   !
+   !----------create contact for master node
+   csys,for_csys			
+   cmsel,s,anchor_side								!select component - nodes
+   ksln,s									!select attached k-points
+   ksum										!get ksum and position of center of gravity for kpoints
+   *get,k_an_centx,kp,0,cent,x
+   *get,k_an_centy,kp,0,cent,y
+   *get,k_an_centz,kp,0,cent,z
+   !
+   allsel,all
+   *get,n_an_cent,node,0,count					!get count of nodes
+   n_an_cent=n_an_cent+1					!set node number for master node
+   csys,0
+   n,n_an_cent,k_an_centx,k_an_centy,k_an_centz			!create master node in the center of gravity of anchorage
+   csys,for_csys						
+   nrotat,all							!rotate master node rsys
+   allsel,all
+   !
+   ! Define surface-based constraint type of pair  
+   mat,10001		!set material number   
+   r,3 			!real element constant
+   real,3  		!real constant set number to elements
+   et,2,170		!et targe
+   et,3,175		!et conta
+   keyopt,3,12,5 	!behavior of contact surface - always bonded 
+   keyopt,3,4,0		!rigid surface constrains
+   keyopt,3,2,2		!contat algorithm MPC
+   keyopt,2,2,1		!et 2, boundary conditions specified by user
+   keyopt,2,4,111111  	!all DOF are constrained in MPCs (multi-point constrains) 
+   type,2		!set the element type number  
+   ! Create a pilot node   
+   tshap,pilo		!Defines simple surfaces for target segment elements - pilot node
+   e,n_an_cent		!define element by node connectivity
+   ! Generate the contact surface  
+   nsel,s,,,anchor_side   !select nodes in component
+   type,3
+   real,3  
+   esln,s,0
+   esurf		!generates elements overlaid on faces of selected nodes   
+   allsel,all  
+   ! 
+   !---------------------SELECTION FOR PULLING LOAD - HORIZONTAL 
+   csys,gr_csys
+   ksel,s,loc,z,gr_kz+gr_dist,gr_kz+gr_dist+(0.035)			!gr_kz-Z position of selected kp(pick_load) in gr_csys + measured distance
+   ksel,r,loc,x,0,r_base1e4						!reselect by radius
+   wpcsys,1,gr_csys							!set WP in csys near to the center of gravity
+   *get,k_y,kp,kp_orient,loc,y
+   wprota,k_y
+   cswpla,3e5,1
+   ksel,r,loc,y,240,300							!reselect loaded part in Y axis (around circumference)
+   nslk,s
+   *get,gr_count_h,node,0,count						!get count for force distribution
+   cm,cg_load_side,node,,1						!create component
+   allsel,all
+   !
+   !---------------------SELECTION FOR PULLING LOAD - VERTICAL
+   csys,gr_csys
+   ksel,s,loc,z,gr_kz+gr_dist,gr_kz+gr_dist+(0.035)				!gr_kz-Z position of selected kp(pick_load) in gr_csys + measured distance
+   ksel,r,loc,x,0,r_base1e4							!reselect by radius
+   csys,3e5
+   ksel,r,loc,y,-30,30								!reselect loaded part in Y axis (around circumference)
+   nslk,s
+   *get,gr_count_v,node,0,count							!get count for force distribution
+   cm,cg_load_grav,node,,1							!create component
+   allsel,all  
+   !
+   wpcsys,1,for_csys
+   csys,for_csys	
+   save,calc_sys,db								!save db file for solution
+   finish									!end of pre-processing
+   !
+   !=============================SOLUTION==============================================
+   *do,o,1,8,1				!run loading scenarios in the cycle 1-8
+    lo_ad=o  				!number of loading scenario  
+    /solu
+    !
+    allsel,all
+    antype,0				!static analysis
+    ddele,all,all			!set DOF, Force and ACEL to 0
+    fdele,all,all
+    acel,0,0,0
+    !
+    !******************1st step full anchorage and leaf mass**********************************
+    !
+    kbc,1					!ramped load
+    csys,for_csys				!csys force application
+    !
+    !anchorage  
+    d,n_an_cent,all,0				!master node - all dof 0
+    allsel,all
+    !
+    !load by foliage load - gravity 
+    *if,scan_only,eq,1,then
+     *do,i,1,ns
+      ksel,s,kp,,SIDE(i,2)		!select k-points for side branch loading - selected in pick_load.mac
+      nslk,s				!select attached nodes
+      esln,s				!add attached elements 
+      *do,j,1,5				!repeat 5times (5 rows)		
+       nsle,a
+       esln,a
+      *enddo
+      *get,lo_count,node,0,count	!get node count
+      f,all,fx,-((side_par(100+i,6)/1000)*9.81)/lo_count	!load side branches with leaf mass*grav. constant (9.81)	
+      allsel,all
+     *enddo      
+     !
+     *elseif,scan_only,eq,2,then		!if extracted diameters are used
+      *vscfun,m_ass_sum,sum,side_par(1,6)	!sum of leaf mass for new re-distribution
+      m_ass_sum=m_ass_sum/1000
+      *do,i,1,np_2
+       ksel,s,kp,,SIDE(i,1)			!select k-points - selected in pick.mac			
+       nslk,s
+       esln,s
+       *do,j,1,5					
+        nsle,a
+        esln,a
+       *enddo
+       *get,lo_count,node,0,count
+       f,all,fx,-((m_ass_sum*FORCE_DIAM(i,n_diam))*9.81)/lo_count	!load side branches with leaf mass (distributed according extracted diameters)*grav constant (9.81)	
+       allsel,all
+      *enddo
+      !	
+      cmsel,s,main_%n_main*na_sel%					!select component (top of main axis)
+      nsle,s
+      *get,lo_count,node,0,count
+      f,all,fx,-((m_ass_sum*FORCE_DIAM(np_2+1,n_diam))*9.81)/lo_count
+      allsel,all
+    *endif
+    !
+    !acel,ac_xcos,ac_ycos,ac_zcos		!gravity acceleration_along global cart sys - not used
+    !
+    eresx,no					!no extrapolation
+    outpr,basic					!print all basic param
+    outres,all,all				!write all results
+    lswrite,1					!write load step 
+    lssolve,1,1,1				!solve 1st LS
+    !
+    finish					!finish LS
+    !-------postprocessing of first step to obtain value fro position with leaf mass loading
+    /post1
+    !
+    set,first					!set st LS
+    !-------------------displacement along main axis 1st step---------
+    !
+    *dim,displ,array,n_main-1,9			!create table for values
+    rsys,for_csys
+    *do,j,1,n_main-1				!number of segments along main branch
+     csys,bas_csys+j				!activate csys of components
+     wpcsys,1,bas_csys+j	
+     *get,k_y,kp,kp_orient,loc,y		
+     wprota,k_y					!orient Y-axis to the top of the branch
+     cswpla,20000+j,1				!create csys
+     ksel,s,loc,z,0,n_cm*e_size			!select k-points
+     ksel,r,loc,x,0,r_base1e4+(r_base1e4*0.01)  !reselect by radius
+     *if,lo_ad,eq,1,then
+       ksel,r,loc,y,70,110			!select kp around circumference 70,110 (vertical loading)- on the surface of branch
+      *elseif,lo_ad,ge,2,then
+       ksel,r,loc,y,-20,20			!select kp around circumference 20,20 (horizontal loading)- on the surface of branch
+     *endif 	
+     nslk,s
+     cm,nod_sel_%j%,node,,1			!create component for result extraction
+     !
+     i=1
+     csys,for_csys				!get positions and displacements of nodes in components
+     *get,count_node,node,0,count
+     *get,_num_n_%i%,node,0,num,min
+     _sum_displx_%i%=ux(_num_n_%i%)  				!displacements
+     _sum_disply_%i%=uy(_num_n_%i%)  				
+     _sum_displz_%i%=uz(_num_n_%i%)  				
+     !
+     _sum_locx_%i%=nx(_num_n_%i%)  				!positions
+     _sum_locy_%i%=ny(_num_n_%i%)  				
+     _sum_locz_%i%=nz(_num_n_%i%)  				
+     !
+     *do,i,2,count_node						
+      _num_n_%i%=ndnext(_num_n_%i-1%) 				!next node
+      _sum_displx_%i%=_sum_displx_%i-1%+ux(_num_n_%i%)		!add displacement
+      _sum_disply_%i%=_sum_disply_%i-1%+uy(_num_n_%i%)
+      _sum_displz_%i%=_sum_displz_%i-1%+uz(_num_n_%i%)
+      !
+      _sum_locx_%i%=_sum_locx_%i-1%+nx(_num_n_%i%)		!add position
+      _sum_locy_%i%=_sum_locy_%i-1%+ny(_num_n_%i%)
+      _sum_locz_%i%=_sum_locz_%i-1%+nz(_num_n_%i%)
+     *enddo
+     !
+     displ(j,1)=(_sum_locx_%count_node%/count_node)*1000		!mean value from sum above
+     displ(j,2)=(_sum_locy_%count_node%/count_node)*1000
+     displ(j,3)=(_sum_locz_%count_node%/count_node)*1000
+     !
+     displ(j,4)=(_sum_displx_%count_node%/count_node)*1000		!mean value from sum above
+     displ(j,5)=(_sum_disply_%count_node%/count_node)*1000
+     displ(j,6)=(_sum_displz_%count_node%/count_node)*1000
+     !
+     allsel,all
+     !
+    *enddo
+    !-----get mass for calculation of acceleration (ACEL- scenario 7 and 8)
+    *get,m_assx,elem,0,mtot,x
+    *get,m_assy,elem,0,mtot,y
+    *get,m_assz,elem,0,mtot,z
+    !
+    csys,for_csys
+    wpcsys,1,for_csys
+    !
+    !---------bending moments at anchorage 1st step
+    !
+    rsys,for_csys
+    *dim,F_SUM,array,6,2					!create table for results
+    !	
+    *get,F_SUM(1,1),node,n_an_cent,rf,fx			!get reaction forces and moments from master node
+    *get,F_SUM(2,1),node,n_an_cent,rf,fy			!in nodal cszs (RSYS)
+    *get,F_SUM(3,1),node,n_an_cent,rf,fz
+    !
+    *get,F_SUM(4,1),node,n_an_cent,rf,mx
+    *get,F_SUM(5,1),node,n_an_cent,rf,my
+    *get,F_SUM(6,1),node,n_an_cent,rf,mz
+    !
+    allsel,all
+    finish
+    !*************************************2nd load step - LOADING SCENARIOS************************************************
+    /solu
+    !
+    allsel,all
+    antype,0				!static analysis
+    !
+    kbc,0				!stepped load
+    csys,for_csys
+    !
+    nsel,s,node,,n_an_cent		!delete DOF from master node
+    ddele,all,all
+    allsel,all
+    !-------------------------------------01 SINGLE POINT - VERTICAL LOADING
+    *if,lo_ad,eq,1,then
+     !
+     !anchorage_movement of holder
+     nsel,s,node,,n_an_cent
+     d,n_an_cent,ux,u_x_v				!movement of holder applied to master node
+     d,n_an_cent,uz,u_z_v
+     d,n_an_cent,roty,-rot_y_v
+     d,n_an_cent,uy,u_y_v
+     d,n_an_cent,rotx,rot_x_v
+     d,n_an_cent,rotz,rot_z_v
+     allsel,all
+     !
+     !pulling load
+     cmsel,s,cg_load_grav
+     f,all,fx,-(F_v/gr_count_v)				!vertical force divided by number of nodes in selection
+     allsel,all
+     !
+    *endif
+    !--------------------------------02 SINGLE POINT SIDE LOAD
+    *if,lo_ad,eq,2,then
+     !
+     !anchorage_movement of holder
+     nsel,s,node,,n_an_cent	
+     d,n_an_cent,uy,u_y				!movement of holder applied to master node
+     d,n_an_cent,ux,u_x
+     d,n_an_cent,rotz,rot_z
+     d,n_an_cent,uz,u_z
+     d,n_an_cent,rotx,rot_x
+     d,n_an_cent,roty,rot_y
+     allsel,all
+     !
+     !pulling load
+     cmsel,s,cg_load_side
+     f,all,fy,(F_h/gr_count_h)			!horizontal force divided by number of nodes in selection
+     allsel,all
+     !
+    *endif
+    !-------------------------------------03-06 SCENARIOS (EP DIAMETER,EP MASS,EP AREA, DIAMETERsc)
+    *if,lo_ad,ge,3,and,lo_ad,lt,7,then
+     !
+     nsel,s,node,,n_an_cent	
+     d,n_an_cent,uy,u_y				!movement of holder applied to master node
+     d,n_an_cent,ux,u_x
+     d,n_an_cent,rotz,rot_z
+     d,n_an_cent,uz,u_z
+     d,n_an_cent,rotx,rot_x
+     d,n_an_cent,roty,rot_y 
+     allsel,all
+     !
+     !load by foliage side load - EP diameters
+     *if,lo_ad,eq,6,then
+       e_nd=np_2				!if calculate with extracted diameters_sc lower number of cycles
+      *else
+       e_nd=ns
+     *endif
+     !
+     *do,i,1,e_nd
+      *if,lo_ad,eq,6,then
+       ksel,s,kp,,SIDE(i,1)			!if extracted diameters_sc select k-point from 1st column
+      *else
+       ksel,s,kp,,SIDE(i,2)
+      *endif
+      nslk,s
+      esln,s
+      *do,j,1,5					
+       nsle,a
+       esln,a
+      *enddo
+      *get,lo_count,node,0,count
+      *if,lo_ad,eq,3,then					!EP diameter
+       f,all,fy,(F_h*side_par(100+i,8))/lo_count
+       *elseif,lo_ad,eq,4,then					!EP mass	
+        f,all,fy,(F_h*side_par(100+i,9))/lo_count
+       *elseif,lo_ad,eq,5,then					!EP area
+        f,all,fy,(F_h*side_par(100+i,10))/lo_count
+       *elseif,lo_ad,eq,6,then					!EP diameter_sc
+        f,all,fy,(F_h*FORCE_DIAM(i,n_diam))/lo_count
+       *endif
+      allsel,all
+     *enddo
+     !
+     *if,lo_ad,eq,6,then					!for scenario 6 - top of the main axis	
+      cmsel,s,main_%n_main*na_sel%
+      nsle,s
+      *get,lo_count,node,0,count
+      f,all,fy,(F_h*FORCE_DIAM(np_2+1,n_diam))/lo_count
+     *endif
+    *endif
+    !-------------------------------------07-08 SCENARIOS - ACEL LOAD and ACEL + EP
+    *if,lo_ad,ge,7,and,lo_ad,le,8,then 
+     !    
+     nsel,s,node,,n_an_cent	
+     d,n_an_cent,uy,u_y				!movement of holder applied to master node
+     d,n_an_cent,ux,u_x
+     d,n_an_cent,rotz,rot_z
+     d,n_an_cent,uz,u_z
+     d,n_an_cent,rotx,rot_x
+     d,n_an_cent,roty,rot_y
+     allsel,all
+     !
+     *if,lo_ad,eq,7,then  		
+      F_hacel=F_h/m_assx			!scenario 7 - horizontal force divided by overall mass
+      *elseif,lo_ad,eq,8,then
+       *vscfun,m_ass_sum,sum,side_par(1,6)	!scenario 8 
+       m_ass_sum=m_ass_sum/1000
+       r_F_hlv=m_assx/(m_assx+m_ass_sum)	!ratio for leafy part of branch
+       F_hw=F_h*r_F_hlv				!force part distributed for structural part (wood)
+       F_hlv=F_h-F_hw				!force part distributed fro leafy part
+       F_hacel=F_hw/m_assx			!acceleration from force part distributed for structural branch (F_hw)
+       !
+     *endif
+     F_hacel_x=F_hacel*cos(kp_acel03_cosx)	!values transformed for for_csys
+     F_hacel_y=F_hacel*cos(kp_acel03_cosy)
+     F_hacel_z=F_hacel*cos(kp_acel03_cosz)
+     !check
+     F_hacelsum=sqrt(F_hacel_x**2+F_hacel_y**2+F_hacel_z**2)	
+     acel,-F_hacel_x,-F_hacel_y,-F_hacel_z	!acel loading
+     ! 
+     *if,lo_ad,eq,8,then      			!in case of scenario 8 - add force distributed according diameters_sc
+      *do,i,1,np_2
+       ksel,s,kp,,SIDE(i,1)
+       nslk,s
+       esln,s
+       *do,j,1,5					
+        nsle,a
+        esln,a
+       *enddo
+       *get,lo_count,node,0,count
+       f,all,fy,(F_hlv*FORCE_DIAM(i,n_diam))/lo_count   	!side branches
+       allsel,all
+      *enddo
+      cmsel,s,main_%n_main*na_sel%
+      nsle,s
+      *get,lo_count,node,0,count
+      f,all,fy,(F_hlv*FORCE_DIAM(np_2+1,n_diam))/lo_count	!top of main axis
+     *endif
+     allsel,all
+     !
+    *endif
+    !
+    !--------------------write 2nd LS
+    allsel,all
+    outpr,basic				!print all basic param
+    outres,all,all			!write all results
+    lswrite,2				!write 2nd load step
+    lssolve,1,2,1			!solve all
+    !
+    save,calc_sys2,db			!save file db
+    finish				!finish solution
+    !
+    !-------------------------POST-PROCESSING 2nd LOAD STEP--------------------
+    !
+    /post1
+    !
+    !---------displacement along main axis 2nd step---------
+    !
+    set,last
+    rsys,for_csys
+    *do,j,1,n_main-1				
+     !
+     wpcsys,1,for_csys
+     cmsel,s,nod_sel_%j%					!get displacements of nodes in components
+     i=1
+     csys,for_csys
+     *get,count_node,node,0,count
+     *get,_num_n_%i%,node,0,num,min
+     _sum_displx_%i%=ux(_num_n_%i%)  				!displacements	
+     _sum_disply_%i%=uy(_num_n_%i%)  		
+     _sum_displz_%i%=uz(_num_n_%i%)  		
+     !
+     *do,i,2,count_node
+      _num_n_%i%=ndnext(_num_n_%i-1%) 
+      _sum_displx_%i%=_sum_displx_%i-1%+ux(_num_n_%i%)		!add next node displacement
+      _sum_disply_%i%=_sum_disply_%i-1%+uy(_num_n_%i%)
+      _sum_displz_%i%=_sum_displz_%i-1%+uz(_num_n_%i%)
+     *enddo
+     !
+     displ(j,7)=(_sum_displx_%count_node%/count_node)*1000	!mean value of all nodes in selection
+     displ(j,8)=(_sum_disply_%count_node%/count_node)*1000
+     displ(j,9)=(_sum_displz_%count_node%/count_node)*1000
+     !
+     allsel,all
+    *enddo
+    !
+    !---------bending moments at anchorage 2nd step
+    rsys,for_csys
+    !
+    *get,F_SUM(1,2),node,n_an_cent,rf,fx			!reaction forces and bending moments at master node
+    *get,F_SUM(2,2),node,n_an_cent,rf,fy
+    *get,F_SUM(3,2),node,n_an_cent,rf,fz
+    !
+    *get,F_SUM(4,2),node,n_an_cent,rf,mx
+    *get,F_SUM(5,2),node,n_an_cent,rf,my
+    *get,F_SUM(6,2),node,n_an_cent,rf,mz
+    !    
+    allsel,all
+    res_sc.mac
+    save,scan_final,db						!save final file db
+    finish
+   *enddo
+  *enddo
+ *enddo
+*enddo
+/eof

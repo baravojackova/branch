@@ -1,0 +1,633 @@
+!Branch - beam modal, structural, linear analysis [m,Pa,N,°]
+!===========================================================
+!
+param.mac			!loading of parameters
+/wait,2
+!/prep7
+!
+!------------------calculation of radius without bark--------
+!
+*dim,rad_clear,array,n,2,1,m,dh,dv
+*voper,rad_clear(1,1),diam_main(1,1),sub,bark		!bark subtraction
+*voper,rad_clear(1,1),rad_clear(1,1),div,2		!divided by two
+*voper,rad_clear(1,2),diam_main(1,2),sub,bark
+*voper,rad_clear(1,2),rad_clear(1,2),div,2
+!
+!=================GEOMETRY====================================
+!----------------calculation of elliptical cross-section parameters for ASEC command (a_r,in_y,in_z,tor_z)----------------------------
+csys,0								!original kart. CSYS
+!
+*dim,cross,array,n,4,1,m,a_r,in_y,in_z,tor_z			!table for cross-section parameters - important to check the orientation
+*voper,cross(1,1),rad_clear(1,1),mult,rad_clear(1,2)		!AREA
+*voper,cross(1,1),cross(1,1),mult,pi
+!								!I=a^3*b*pi/4
+*voper,cross(1,2),rad_clear(1,2),mult,rad_clear(1,2)		!iny, neutr axis y(over horizontal)	
+*voper,cross(1,2),cross(1,2),mult,rad_clear(1,2)		!a^3
+*voper,cross(1,2),cross(1,2),mult,rad_clear(1,1)		!*b
+*voper,cross(1,2),cross(1,2),mult,pi				!mult pi
+*voper,cross(1,2),cross(1,2),div,4				!div 4
+!
+*voper,cross(1,3),rad_clear(1,1),mult,rad_clear(1,1)		!inz, neutr axis z(over vertical)	
+*voper,cross(1,3),cross(1,3),mult,rad_clear(1,1)		!a^3
+*voper,cross(1,3),cross(1,3),mult,rad_clear(1,2)		!*b
+*voper,cross(1,3),cross(1,3),mult,pi				!mult pi
+*voper,cross(1,3),cross(1,3),div,4				!div 4
+!
+!
+*do,i,1,n		
+ cross(i,4)=(pi*rad_clear(i,2)**3*rad_clear(i,1)**3)/(rad_clear(i,2)**2+rad_clear(i,1)**2)		!torsion moment J
+*enddo
+!
+*do,i,1,n							!definition of cross-sections
+ sectype,i,beam,asec,						!asec- user defined				
+ secoffset,cent	
+ secdata,cross(i,1),cross(i,2),0,cross(i,3),0,cross(i,4),
+*enddo
+!
+!----------------MAIN AXIS------------------------------
+!
+wprota,0,0,alfa						!rotation of WP around z axis according branch tilt at base
+wprota,0,beta_b,0					!rotation of WP around y axis_caused by tilt of the holder
+cswpla,20,1						!creation of cyl. local csys (LSYS) at WP position 					
+csys,20							!LSYS, z is in direction of main axis				
+!
+*dim,POZ_0,array,n,3,1					!creation of table for position of kp along main axis
+!
+wpcsys,1,20						!wp at lsys 20
+k,1,0,0,0						!1st kp creation - base of the branch
+!
+*do,i,1,n						!cycle for creation of main axis
+ wpoffs,0,0,diam_main(i,6)				!offset of wp for the distance between points- at first equal to 0	
+ wprota,0,diam_main(i,4),diam_main(i,5)			!rotation of wp according main axis tilt/angle in horizontal and vertical direction
+ cswpla,100+i,1						!creation of lcsys 100+i
+ csys,100+i						!csys on
+ *if,i,lt,n,then				        	
+  k,i+1,0,0,diam_main(i+1,6)				!create kp in distance of marker/point oriented according branch angle except the top of the branch
+ *endif					
+*enddo
+wpcsys,1,0						!return WP to global csys/origin
+csys,0	
+!
+*do,i,1,n						!get position o main axis in csys 0 for definitions of cross-sections
+ *get,POZ_0(i,1),kp,i,loc,x
+ *get,POZ_0(i,2),kp,i,loc,y
+ *get,POZ_0(i,3),kp,i,loc,z
+*enddo
+!
+csys,20							!create orientation k-point for orientation of cross-section, x axis
+kp_orien=7e7						!number of orient point 7e7
+k,kp_orien,1e7,0,0
+csys,0
+!
+*do,i,1,n-1						
+ spline,i,i+1						!create line between k-points
+ allsel
+*enddo
+!
+lglue,all					!glue lines of main axis
+!--------------SIDE (LATERAL) BRANCHES------------
+csys,0							
+wpcsys,1,0						!set WP to origin
+wpoffs,POZ_0(2,1),POZ_0(2,2),POZ_0(2,3)			!offset WP at the position of anchorage
+for_csys=1000						!name the RSYS 1000 for_csys
+cswpla,for_csys,0					!create cart. csys for results (RSYS) 1000 at the position of anchorage
+csys,for_csys						
+kp_orien_csys=2e7					!create second orientation k-point for setting of lsys of side branches
+k,kp_orien_csys,1,0,-100
+!
+*do,i,1,ns						!cycle for creation of side branches
+ wpcsys,1,100+side_par(100+i,11) 				!move to lsys of main axis point near bellow the side branch
+ wpoffs,0,0,side_par(100+i,3)				!move WP to the origin of side branch (side_par.mac - lm)
+ n_row=side_par(100+i,11)+1					!number of row for selection of input parameters			 	
+ wprota,0,diam_main(n_row,4),diam_main(n_row,5)		!rotation of wp according main axis tilt/angle in horizontal and vertical direction
+ cswpla,1000+i,1					!creation of lcsys 1000+i
+ *get,k_y,kp,kp_orien_csys,loc,y			!get location in of orient point in cyl. csys
+ wprota,k_y						!rotate WP - orient the csys in position of camera
+ cswpla,1000+i,1					!replacement of lcsys 1000+i
+ !
+ wprota,side_par(100+i,1)					!rotate WP according clockwise position and tilt of side branch
+ wprota,0,0,side_par(100+i,2)				!rotate WP according tilt of side branch
+ cswpla,1000+i,1					!replacement of lcsys 1000+i
+ csys,1000+i 						!set lsys 1000+i
+ k,%100+i%,0,0,0					!k-point at the side branch base
+ k,%200+i%,0,0,side_par(100+i,4) 				!k-point at the side branch top
+*enddo
+allsel,all
+wpcsys,1,0						!return WP to global csys
+csys,0
+!
+*do,i,1,ns						
+ spline,100+i,200+i					!create line between k-points
+ allsel
+*enddo
+!
+csys,20							!on the csys 20 - branch origin
+wpcsys,1,20						!return wp to cyl. lsys
+!
+!set on if you want to check the branch geometry and orientation
+!csys,0						
+!wpcsys,1,0
+!/TRIAD,LBOT 	
+!
+!=================MESHING AND PROPERTIES ASSINGMNET==============
+!
+!----------------main axis-------------------
+csys,20								!selection of lines in lsys	
+*do,i,1,n-1							
+ csys,100+i		
+ lsel,s,loc,z,0+0.0005,diam_main(i+1,6)-0.0005
+ lsel,r,loc,x,0
+ lsel,r,loc,y,0
+ latt,100+i,1,1,,kp_orien,kp_orien,100+i			!assignment of material 100+i, orientation k-point for neutral axis,taper section number
+ !
+ csys,0
+ sectype,100+i,taper,,						!tapered beams
+ secdata,i,POZ_0(i,1),POZ_0(i,2),POZ_0(i,3)			!cross-section 1
+ secdata,i+1,POZ_0(i+1,1),POZ_0(i+1,2),POZ_0(i+1,3)		!cross-section 2
+ et,1,beam189							!ET189 - 3-node element
+ esize,e_sizn
+ keyopt,1,6,3							!output section forces/moments extrapolated to the element nodes
+ lmesh,all							!mesh all
+ allsel
+*enddo
+allsel
+!
+!----------------side branches-----------------
+!
+*do,i,1,ns
+ csys,1000+i
+ lsel,s,loc,z,0+0.0005,side_par(100+i,4)-0.0005		!selection of lines in lsys
+ lsel,r,loc,x,0
+ latt,1000+i,1,1,,,,1000+i				!assingment of material 1000+i,cross-section number
+ csys,0
+ sectype,1000+i,beam,csolid,,5				!circle  cross-section, mesh fine 5
+ secoffset,cent						!position center og gravity
+ secdata,(side_par(100+i,5)-barks)/2,60,8			!radius of branch, division circuit, division in radius
+ esize,e_sizs
+ lmesh,all						!mesh all
+*enddo
+allsel
+!
+eplot							!check mesh
+! 
+csys,for_cys						!rotate all nodes in the RSYS for definition of boundary conditions
+nrotat,all
+!
+!-----------------constraints among main axis and side branches - transfer of degrees of freedom (DOF)
+*dim,n_num,array,ns,2,1					!create table for node numbers
+!
+vzd_nod=e_sizn/3					!distance of nodes in each element
+ce_kof=1						!ratio for transfer of DOF
+csys,20
+!
+*do,i,1,ns							
+ ksel,s,kp,,%100+i%						!select k-point at the base of side branch
+ nslk,s								!select node attached to k-point			
+ *get,n_num(i,1),node,0,num,max				!get node number and write into table
+ csys,100+side_par(100+i,11)					!lcsys along main axis
+ nsel,s,loc,z,side_par(100+i,3)-(vzd_nod/10),side_par(100+i,3)+(vzd_nod/10)		!selection of nodes close to the base of side branches
+ nsel,r,loc,y,0				
+ nsel,r,loc,x,0					
+ *get,n_num(i,2),node,0,num,min					!get node number and write into table
+ allsel
+ ce,100+i,0,n_num(i,2),rotz,ce_kof,n_num(i,1),rotz,-1		!assignment of constrain equations
+ ce,200+i,0,n_num(i,2),rotx,ce_kof,n_num(i,1),rotx,-1
+ ce,300+i,0,n_num(i,2),roty,ce_kof,n_num(i,1),roty,-1
+ ce,400+i,0,n_num(i,2),ux,ce_kof,n_num(i,1),ux,-1
+ ce,500+i,0,n_num(i,2),uy,ce_kof,n_num(i,1),uy,-1
+ ce,600+i,0,n_num(i,2),uz,ce_kof,n_num(i,1),uz,-1
+*enddo
+csys,0
+!
+save,beam_geom,db						!save file with beam model geometry
+!==================MATERIAL PROPERTIES===========================
+!
+e_lx=e_lx_b
+e_ry=e_lx_b					!to consider shear the orthotropic material model has to be defined, even only ex,prxy and gxy is used
+e_tz=e_lx_b							
+!
+g_xy=g_xy_b
+g_yz=g_xy_b 						
+g_xz=g_xy_b						
+!
+pr_xy=pr_xy_b
+pr_yz=pr_xy_b						
+pr_xz=pr_xy_b						
+!
+!-----------------material main axis-----------------------------
+!
+*do,i,1,n-1						
+ mp,ex,100+i,e_lx*diam_main(i,3)			!diam_main (i,3) coefficient for reducing el - possible change of properties in each part
+ mp,ey,100+i,e_ry*diam_main(i,3)	
+ mp,ez,100+i,e_tz*diam_main(i,3)
+ !
+ mp,gxy,100+i,g_xy*diam_main(i,3)
+ mp,gyz,100+i,g_yz*diam_main(i,3)
+ mp,gxz,100+i,g_xz*diam_main(i,3)
+ !
+ !mp,nuxy,100+i,nu_xy					!choose minor or major according positive definition of matrix
+ !mp,nuyz,100+i,nu_xy
+ !mp,nuxz,100+i,nu_xy
+ !
+ mp,prxy,100+i,pr_xy			
+ mp,pryz,100+i,pr_yz
+ mp,prxz,100+i,pr_xz
+ !
+ mp,dens,100+i,dens_w**diam_main(i,3)				
+*enddo
+!
+!-----------------materail side branches-----------------------------
+!
+*do,i,1,ns
+ mp,ex,1000+i,e_lx*m_kof_b				!m_kof_b - coefficient for reducing el					
+ mp,ey,1000+i,e_ry*m_kof_b	
+ mp,ez,1000+i,e_tz*m_kof_b
+ !
+ mp,gxy,1000+i,g_xy*m_kof_b
+ mp,gyz,1000+i,g_yz*m_kof_b
+ mp,gxz,1000+i,g_xz*m_kof_b
+ !
+ !mp,nuxy,1000+i,nu_xy
+ !mp,nuyz,1000+i,nu_xy
+ !mp,nuxz,1000+i,nu_xy
+ !
+ mp,prxy,1000+i,pr_xy			
+ mp,pryz,1000+i,pr_yz
+ mp,prxz,1000+i,pr_xz
+ !
+ mp,dens,1000+i,dens_w*m_kof_b				
+*enddo
+!
+!===================BOUDNARY CONDITIONS PREPARATION=================
+!----------getting frontal areas of branches------------------------
+!
+*dim,f_area,array,n+ns,5,1,m,arfpfa				!table for frontal area of branches
+!
+*do,i,1,n							!1st column numbers of k-points
+ f_area(i,1)=i
+*enddo
+*do,i,1,ns
+ f_area(n+i,1)=200+i
+*enddo
+!
+*do,i,3,n							!area of branches f_area=1/2*(diam*segment length)
+ f_area(i,2)=(1/2)*(diam_main(i-1,2)+diam_main(i,2))*diam_main(i,6)
+*enddo
+*do,i,1,ns
+ f_area(n+i,2)=side_par(100+i,5)*side_par(100+i,4)		!A=diam*branch length
+*enddo
+!
+*vscfun,arlv_sum,sum,side_par(1,7)				!sum of leaves areas (pruned parts)
+*vscfun,arbr_sum,sum,f_area(1,2)			!sum of structural branches areas
+arall_sum=arlv_sum+arbr_sum				!sum all
+arlv_po=arlv_sum/arall_sum				!ratio - leaves
+arbr_po=arbr_sum/arall_sum				!ratio -branches
+!								
+F_haLV=F_h*arlv_po					!force distribution for leafy area 
+F_hBR=F_h*arbr_po					
+!
+!
+*do,i,1,n+ns
+ f_area(i,3)=f_area(i,2)/arbr_sum			!ratios for branches frontal areas segments
+ f_area(i,4)=f_area(i,3)*F_hBR				!force distribution for loading structural branches
+*enddo
+!
+*vscfun,check_rat,sum,f_area(1,3)			!check of ratios sum should be equal to 1
+*vscfun,check_for,sum,f_area(1,4)			!check of force sum should be equal to f_hBR
+!
+!---------------force distribution according diameters, mass, areas and frontal areas
+!
+*dim,f_orces,array,ns,4,1,Fd,Fm,Far,Ffar			!create table
+!
+*voper,f_orces(1,1),side_par(1,8),mult,F_h			!force distribution according diameter
+*voper,f_orces(1,2),side_par(1,9),mult,F_h			!force distribution according mass
+*voper,f_orces(1,3),side_par(1,10),mult,F_h			!force distribution according areas
+*voper,f_orces(1,4),side_par(1,10),mult,F_haLV		!force distribution of leafy parts
+!
+finish							!end of pre-processing
+!
+!===============SOLUTION AND BOUDNARY CONDITIONS===================
+!
+/solu					!start solution
+!
+!------------1st LOAD STEP (LS) - ONLY LEAF MASS---------------------------							
+!
+!----anchorage				
+ksel,s,kp,,2				!k-point at anchorage position
+nslk,s
+*get,an_nod,node,0,num,min		!anchorage node number
+allsel,all	
+!
+n_run=0					!number of cycle, if loading in cycles is used
+*do,j,6,6				!loading scenarios in cycles
+ !
+ lo_ad=j				!number of loading scenario
+ /solu					!start solution in 2nd loop
+ !
+ antype,0				!static analysis
+ ddele,all,all				!delete DOF defined in previous loop
+ fdele,all				!delete forces 
+ acel,0,0,0				!set acceleration to 0
+ !
+ kbc,1					!ramped loading
+ d,an_nod,uz,0				!full anchorage
+ d,an_nod,ux,0
+ d,an_nod,uy,0				
+ d,an_nod,rotx,0
+ d,an_nod,roty,0
+ d,an_nod,rotz,0
+ !
+ !-------leaf mass
+ *do,i,1,ns				
+  ksel,s,kp,,200+i				!select k-point at the top of side branches
+  nslk						!select node attached to k-point
+  *get,n_%200+i%,node,0,num,max			!get node number
+  f,n_%200+i%,fx,-((side_par(100+i,6)/1000)*9.81)	!leaf mass*grav constant (9.81)	
+  allsel					!select all
+ *enddo
+ allsel,all
+ !
+ outpr,esol				!prin element solution
+ outres,all,all				!all results (steps, substeps)
+ lswrite,1				!write load step
+ lssolve,1,1,1				!solve 1st LS
+ !
+ !-----get mass for calculation of acceleration
+ *get,m_assx,elem,0,mtot,x
+ *get,m_assy,elem,0,mtot,y
+ *get,m_assz,elem,0,mtot,z
+ !
+ finish					!end solution
+ !
+ !------------2nd LOAD STEP (LS) - ANCHORAGE MOVEMENT AND LOADING SCENARIOS (1-8)---------------------------
+ !
+ /solu								!start solution
+ kbc,0								!stepped loading
+ !
+ !								!selection of node at the center of gravity
+ csys,100+n_mg							!lsys of segment near center of gravity
+ nsel,s,loc,z,gr_dist_b-(vzd_nod/10),gr_dist_b+(vzd_nod/10) 	!nodes selection
+ nsel,r,loc,x,0	 						!
+ *get,f_nod,node,0,num,max					!get node number
+ allsel,all
+ csys,for_csys
+ !
+ ddele,all						!delete DOF - define new bellow
+ !
+ allsel
+ !
+ !---------LOAD SCENARIO 1 - SINGLE-POINT VERTICAL LOADING
+ *if,lo_ad,eq,1,then
+  d,an_nod,ux,u_x_v				!anchorage - DOF - holder movement
+  d,an_nod,uz,u_z_v
+  d,an_nod,roty,-rot_y_v
+  d,an_nod,uy,u_y_v
+  d,an_nod,rotx,rot_x_v
+  d,an_nod,rotz,rot_z_v
+  !
+  !-----force						
+  f,f_nod,fx,-F_v				!force single-point vertical F_v
+ *endif
+ !
+ !---------LOAD SCENARIO 2 - SINGLE-POINT HORIZONTAL LOADING
+ *if,lo_ad,eq,2,then
+  d,an_nod,uy,u_y				!anchorage - DOF - holder movement
+  d,an_nod,ux,u_x
+  d,an_nod,rotz,rot_z
+  d,an_nod,uz,u_z
+  d,an_nod,rotx,rot_x
+  d,an_nod,roty,rot_y
+  !
+  !-----force
+  f,f_nod,fy,F_h				!force single-point horizontal F_h
+ *endif
+ !
+ !
+ !---------LOAD SCENARIO 3-9 - MULTI-POINT LOADING
+ !
+ *if,lo_ad,ge,3,and,lo_ad,lt,9,then
+  !
+  d,an_nod,uy,u_y				!anchorage - DOF - holder movement
+  d,an_nod,ux,u_x
+  d,an_nod,rotz,rot_z
+  d,an_nod,uz,u_z
+  d,an_nod,rotx,rot_x
+  d,an_nod,roty,rot_y
+  !
+  !-------force diameter distribution EP diameter
+  *if,lo_ad,eq,3,then
+   *do,i,1,ns					!loading to end point of side branches - selected in 1st load step
+    f,n_%200+i%,fy,f_orces(i,1)			
+   *enddo
+   !-------force mass distribution EP mass
+   *elseif,lo_ad,eq,4,then
+    *do,i,1,ns
+     f,n_%200+i%,fy,f_orces(i,2)			
+    *enddo
+   !-------force area distribution EP area
+   *elseif,lo_ad,eq,5,then
+    *do,i,1,ns
+     f,n_%200+i%,fy,f_orces(i,3)			
+    *enddo
+   !-------force to K-points - frontal area distribution KP area
+   *elseif,lo_ad,eq,6,then
+    *do,i,1,n					!main axis
+     ksel,s,kp,,f_area(i,1)			!selection of k-point along main axis
+     nslk,s					!nodes attached to k-points
+     *get,f_area(i,5),node,0,num,max		!get node number
+     f,f_area(i,5),fy,f_area(i,4)		!force distributed according frontal area of structural branches
+    *enddo     
+    allsel,all   
+    !
+    *do,i,1,ns					!side branches tops
+     f,n_%200+i%,fy,f_orces(i,4)+f_area(n+i,4) 	!combination of branches frontal areas and leaf areas
+    *enddo
+    !-------force distributed according volume mass (acceleration - ACEL)
+   *elseif,lo_ad,eq,7,then
+    F_hacel=F_h/m_assx				!calculate acceleration form force and mass
+    acel,0,-F_hacel,0				!define acceleration in direction of loading (works in opposite direction)
+    !-------force distributed according volume mass and diameters (acceleration - ACEL and EP diameter)
+   *elseif,lo_ad,eq,8,then
+    *vscfun,m_ass_sum,sum,side_par(1,6)		!sum of leaf mass
+    m_ass_sum=m_ass_sum/1000
+    r_F_hlv=m_assx/(m_assx+m_ass_sum)		!ratio for distribution to volume and leaf mass of side branches
+    F_hw=F_h*r_F_hlv				!Force distributed for leafy parts
+    F_hlv=F_h-F_hw				!Force distributed for structural branches (wood)
+    F_hacel=F_hw/m_assx				!acceleration from force and mass
+    acel,0,-F_hacel,0				!define acceleration
+    *do,i,1,ns
+     f,n_%200+i%,fy,F_hlv*side_par(100+i,8)		!added load top side branches according diameter distribution
+    *enddo
+  *endif
+ *endif
+ allsel,all
+ !
+ outpr,esol					!prin element solution
+ outres,all,all					!all results (steps, substeps)
+ lswrite,2					!write 2nd LS
+ lssolve,1,2,1					!solve all
+ !
+ finish						!end solution
+ !save,file,db
+ !
+ !=====================POST-PROCESSING========================================
+ !
+ /post1
+ !
+ set,first							!1st LS for getting state with leaf mass
+ !
+ csys,for_cys							
+ rsys,for_cys							!results coordinate system
+ !
+ !-----------BENDING MOMENTS AT ANCHORAGE
+ !
+ *dim,F_SUM,table,6,4						!create table
+ !
+ nsel,s,node,,an_nod						!selection of anchorage node
+ !
+ fsum,rsys							!write sum of forces in RSYS, 
+ !								!writes overall value without considering the point position
+ !
+ *get,F_SUM(1,1),fsum,0,item,fx					
+ *get,F_SUM(2,1),fsum,0,item,fy					
+ *get,F_SUM(3,1),fsum,0,item,fz
+ !
+ *get,F_SUM(4,1),fsum,0,item,mx
+ *get,F_SUM(5,1),fsum,0,item,my
+ *get,F_SUM(6,1),fsum,0,item,mz
+ !
+ *get,F_SUM(1,3),node,an_nod,rf,fx				!get reaction force - use for considering s nodal position
+ *get,F_SUM(2,3),node,an_nod,rf,fy				!in nodal RSYS
+ *get,F_SUM(3,3),node,an_nod,rf,fz
+ !
+ *get,F_SUM(4,3),node,an_nod,rf,mx
+ *get,F_SUM(5,3),node,an_nod,rf,my
+ *get,F_SUM(6,3),node,an_nod,rf,mz
+ !
+ allsel
+ !
+ !------POSITION AND DISPLACEMENTS ALONG MAIN AXIS
+ !
+ *dim,nnum_disp,array,n,1,1
+ *dim,displ,array,n,9,1	
+ !
+ *do,i,1,n						!selection of points along main axis
+  csys,20
+  ksel,s,kp,,i
+  nslk,s
+  *get,nnum_disp(i,1),node,0,num,min			!numbers of attached nodes
+  allsel,all
+ *enddo
+ !
+ *do,i,1,n
+  csys,for_csys
+  *get,displ(i,1),node,nnum_disp(i,1),loc,x				!positions in RSYS
+  *get,displ(i,2),node,nnum_disp(i,1),loc,y
+  *get,displ(i,3),node,nnum_disp(i,1),loc,z
+  !
+  *get,displ(i,4),node,nnum_disp(i,1),u,x				!displacements in RSYS
+  *get,displ(i,5),node,nnum_disp(i,1),u,y
+  *get,displ(i,6),node,nnum_disp(i,1),u,z			
+  !
+ *enddo
+ !
+ *do,i,1,3
+  *voper,displ(1,i),displ(1,i),mult,1000				!in (mm)
+  *voper,displ(1,i+3),displ(1,i+3),mult,1000				!in (mm)	
+ *enddo
+ !
+ !------------position of side branches base
+ *dim,nnum_sidep,array,ns,1,1
+ *dim,poz_side,array,ns,9,1				
+ !
+ *do,i,1,ns						!selection of points at side branches base
+  csys,20
+  ksel,s,kp,,100+i
+  nslk,s
+  *get,nnum_sidep(i,1),node,0,num,min
+  allsel,all
+ *enddo
+ !
+ *do,i,1,ns
+  csys,for_csys
+  *get,poz_side(i,1),node,nnum_sidep(i,1),loc,x		!positions in RSYS
+  *get,poz_side(i,2),node,nnum_sidep(i,1),loc,y		
+  *get,poz_side(i,3),node,nnum_sidep(i,1),loc,z
+ *enddo
+ !
+ *do,i,1,ns
+  csys,for_csys
+  *get,poz_side(i,4),node,nnum_sidep(i,1),u,x		!displacements in RSYS
+  *get,poz_side(i,5),node,nnum_sidep(i,1),u,y
+  *get,poz_side(i,6),node,nnum_sidep(i,1),u,z
+ *enddo
+ !
+ *do,i,1,3
+  *voper,poz_side(1,i),poz_side(1,i),mult,1000		!in (mm)
+  *voper,poz_side(1,i+3),poz_side(1,i+3),mult,1000 	!in (mm)
+ *enddo
+ !
+ !-----------2nd LOAD STEP RESULTS
+ !
+ set,last						!last  (2nd) LS 
+ !
+ rsys,1000 
+ !
+ !-----------BENDING MOMENTS AT ANCHORAGE
+ nsel,s,node,,an_nod								
+ fsum,rsys							!write sum of forces in RSYS, 
+ !								!writes overall value without considering the point position
+ *get,F_SUM(1,2),fsum,0,item,fx				
+ *get,F_SUM(2,2),fsum,0,item,fy
+ *get,F_SUM(3,2),fsum,0,item,fz
+ !
+ *get,F_SUM(4,2),fsum,0,item,mx
+ *get,F_SUM(5,2),fsum,0,item,my
+ *get,F_SUM(6,2),fsum,0,item,mz
+ !
+ *get,F_SUM(1,4),node,an_nod,rf,fx				!get reaction force - use for considering s nodal position
+ *get,F_SUM(2,4),node,an_nod,rf,fy				!in nodal RSYS
+ *get,F_SUM(3,4),node,an_nod,rf,fz
+ !
+ *get,F_SUM(4,4),node,an_nod,rf,mx
+ *get,F_SUM(5,4),node,an_nod,rf,my
+ *get,F_SUM(6,4),node,an_nod,rf,mz
+ !
+ allsel							!vyber vseho
+ !
+ !------POSITION AND DISPLACEMENTS ALONG MAIN AXIS
+ rsys,for_csys
+ !
+ *do,i,1,n
+  *get,displ(i,7),node,nnum_disp(i,1),u,x			!displacements in RSYS
+  *get,displ(i,8),node,nnum_disp(i,1),u,y
+  *get,displ(i,9),node,nnum_disp(i,1),u,z
+ *enddo
+ !
+ *do,i,1,3
+  *voper,displ(1,i+6),displ(1,i+6),mult,1000			!(in mm)
+ *enddo
+ !
+ !------------position of side branches base
+ !
+ *do,i,1,ns
+  csys,for_csys
+  *get,poz_side(i,7),node,nnum_sidep(i,1),u,x
+  *get,poz_side(i,8),node,nnum_sidep(i,1),u,y
+  *get,poz_side(i,9),node,nnum_sidep(i,1),u,z
+ *enddo
+ !
+ *do,i,1,3
+  *voper,poz_side(1,i+6),poz_side(1,i+6),mult,1000			!in (mm)
+ *enddo
+ !
+ res_b.mac						!write results to table txt
+ pos_s.mac						!write positions of side branches to table txt
+*enddo
+!
+wpcsys,1,for_csys					!plot final branch with WP in anchorage
+/TRIAD,LBOT 
+save,beam_fin,db					!save file
+!
+finish
+/eof

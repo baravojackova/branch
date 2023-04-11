@@ -1,0 +1,57 @@
+/pmacro
+!04 PICK LOAD Branch - scan-based solid model, picking operations for load definition (GUI needed) [Pa,N,m,kg/m3]
+!==============================================================================================
+!selection of points for Degrees Of Freedom (DOF)
+!1. end of branches which should be loaded by leaves/added load - according notes/ can be used also selection from file pick.mac
+!2. kp at base and middle of first branch
+!3. kp close the branch which is near to center of gravity
+!
+/prep7
+!
+!------------------loading file db and parameters
+!
+resume,'main_all','db',,0,0  				!resume file with assigned properties
+eplot							!plot elements
+!
+param.mac						!loading parameters
+/wait,2
+!
+!-------------selection of points for DOF------------------------
+!
+!----1. side branches selection for loading
+!
+kplot							!plot kp
+/auto,1							!scale to whole body
+/rep,fast						!re-plot
+!
+*msg,ui,
+ select kp for side and leaf loads
+*do,i,1,ns					!number of side branches
+ ksel,s,p
+ *get,SIDE(i,2),kp,0,num,min			!get kp number and location
+ allsel,all
+*enddo
+!
+!----2. selection of kp for anchorage and setting of branch rotation
+!
+*msg,ui,
+ select kp at the base and middle of 1st branch
+ksel,s,p				!select kp near the first branch base and kp at branch base
+*get,an_k1,kp,0,num,min		!get kp number and location
+allsel,all
+!
+!----3. selection of kp for pulling load/center of gravity
+!
+*msg,ui,
+ select kp near the branch closest to centre of gravity
+ksel,s,p				!select kp near the branch close to the centre of gravity
+*get,gr_k,kp,0,num,min			!get kp number and location
+allsel,all
+!
+save,main_dof,db			!save file main_dof.db with selected kp for boundary conditions
+!
+!calc.mac
+!next file calc.mac - final macro for calculation nod GUI needed
+/eof
+
+

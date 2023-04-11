@@ -1,0 +1,36 @@
+!results branch scan-based solid model
+!=====================================
+!-----write displacements and fsum
+!
+*if,n_run,lt,10,then
+ *cfopen,%br_num%_sc_displ00%o% acrotx%k% rotz%l% rotx%m%_%o%,txt
+  *vwrite,sequ,displ(1,1),displ(1,2),displ(1,3),displ(1,4),displ(1,5),displ(1,6),displ(1,7),displ(1,8),displ(1,9),
+  (F5.0,' ',F,' ',F,' ',F,' ',F,' ',F,' ',F,' ',F,' ',F,' ',F,) 
+ *cfclose
+*elseif,n_run,lt,100,
+ *cfopen,%br_num%_sc_displ0%o% acrotx%k% rotz%l% rotx%m%_%o%,txt
+  *vwrite,sequ,displ(1,1),displ(1,2),displ(1,3),displ(1,4),displ(1,5),displ(1,6),displ(1,7),displ(1,8),displ(1,9),  
+  (F5.0,' ',F,' ',F,' ',F,' ',F,' ',F,' ',F,' ',F,' ',F,' ',F,)  
+  *cfclose
+*else
+ *cfopen,%br_num%_sc_displ%o% acrotx%k% rotz%l% rotx%m%_%o%,txt
+  *vwrite,sequ,displ(1,1),displ(1,2),displ(1,3),displ(1,4),displ(1,5),displ(1,6),displ(1,7),displ(1,8),displ(1,9),  
+  (F5.0,' ',F,' ',F,' ',F,' ',F,' ',F,' ',F,' ',F,' ',F,' ',F,)  
+  *cfclose
+*endif
+!
+*if,n_run,lt,10,then
+ *cfopen,%br_num%_sc_fsum00%o% acrotx%k% rotz%l% rotx%m%_%o%,txt
+  *vwrite,sequ,F_SUM(1,1),F_SUM(1,2),
+   (F5.0,' ',F,' ',F)  
+  *cfclose
+ *elseif,n_run,lt,100,
+  *cfopen,%br_num%_sc_fsum0%o% acrotx%k% rotz%l% rotx%m%_%o%,txt
+   *vwrite,sequ,F_SUM(1,1),F_SUM(1,2),
+   (F5.0,' ',F,' ',F)  
+  *cfclose
+ *else
+  *cfopen,%br_num%_sc_fsum%o% acrotx%k% rotz%l% rotx%m%_%o%,txt
+   *vwrite,sequ,F_SUM(1,1),F_SUM(1,2),
+   (F5.0,' ',F,' ',F)  
+*endif

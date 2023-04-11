@@ -1,0 +1,337 @@
+!03 SCAN Branch - scan-based solid model, material definition_after branches selection (pick.mac) no GUI needed [Pa,N,m,kg,kg/m3]
+!================================================================================================================================
+!assignment of ESYS and material properties, at the end save main_all
+!necessary to check if all elements have defined mat. properties
+!
+!------------------loading file with selected kp and side branches-------------------
+!
+resume,'main_cm','db',,0,0 
+!
+param.mac			!loading of parameters
+!parres,new,side_p,txt
+!----------------------SIDE BRANCHES ASSIGNMENT OF CSYS AND MAT PROPERTIES------------
+allsel,all
+*dim,SIDE_POS,array,n_sel/n_cm,7,np_2		!create array with coordinates and selected kp,x,z,y,kpi,kpi_a
+*get,kp_max,kp,0,num,max
+!
+!----selection of components + coordinates and creation of CSYS---------
+*do,h,1,np_2					!np_2_number of chosen side branches
+ ksel,s,kp,,SIDE(h,1,1)				!kp selection
+ nslk,s						!node selection at kp position
+ esln,s						!element selection at node position
+ *do,i,1,n_sel,1				!creation of components	
+  nsle,a					!selection of attached nodes
+  esln,a					!selection of attached elements
+  eplot						!plot elements
+  *do,j,0,n_sel,n_cm				!at each n-th selection made component
+   *if,j,eq,i,and,j,eq,n_cm,then		!first component
+    cm,elem_%h%_%j%,elem,1			!create component	
+    cm,elem_%h%,elem,1				!create component - next selection will be added to cm - for unselection
+    ksln,s					!select kp attached to nodes
+    ksum					!kp sum for center of gravity - not possible for elements only
+    *get,SIDE_POS(j/n_cm,1,h),kp,0,cent,x	!get center of gravity  position x,y,z
+    *get,SIDE_POS(j/n_cm,2,h),kp,0,cent,y
+    *get,SIDE_POS(j/n_cm,3,h),kp,0,cent,z
+    !
+    k,kp_max+(h*1e5)+(j/n_cm),SIDE_POS(j/n_cm,1,h),SIDE_POS(j/n_cm,2,h),SIDE_POS(j/n_cm,3,h)		!create kp at centr. pos.
+    SIDE_POS(j/n_cm,4,h)=kp_max+(h*1e5)+(j/n_cm)							!save kp number_branch num*1e5
+    !							
+   *elseif,j,eq,i,and,j,gt,n_cm,then		!at next components
+    !
+    ksel,u,kp,,SIDE_POS(j/n_cm-1,4,h)											!unselect previously created kp (not influence the ksum and kp selection)
+    *set,SIDE_POS(j/n_cm-1,5,h),kp(SIDE_POS(j/n_cm-1,1,h),SIDE_POS(j/n_cm-1,2,h),SIDE_POS(j/n_cm-1,3,h))		!selection of side point for orient. of xy plane
+    cmsel,u,elem_%h%													!unselect previously created comp.
+    cm,elem_%h%_%j%,elem,1												!create component for this branch part, current selection
+    nsle,s												!select nodes
+    ksln,s												!select kp 
+    ksum					
+    *get,SIDE_POS(j/n_cm,1,h),kp,0,cent,x	!get center of gravity position x,y,z
+    *get,SIDE_POS(j/n_cm,2,h),kp,0,cent,y
+    *get,SIDE_POS(j/n_cm,3,h),kp,0,cent,z
+    cmsel,s,elem_%h%_%j%			!select active comp.
+    cmsel,a,elem_%h%				!add previously defined comp.
+    cm,elem_%h%,elem,1				!create overall component - next selection will be added to cm - for unselection
+    !
+    k,kp_max+(h*1e5)+(j/n_cm),SIDE_POS(j/n_cm,1,h),SIDE_POS(j/n_cm,2,h),SIDE_POS(j/n_cm,3,h)			!create kp at centr. pos.
+    SIDE_POS(j/n_cm,4,h)=kp_max+(h*1e5)+(j/n_cm)								!save kp number
+    ksel,a,kp,,SIDE_POS(j/n_cm-1,4,h),SIDE_POS(j/n_cm,4,h)							!select kp's at centr.pos.
+    ksel,a,kp,,SIDE_POS(j/n_cm-1,5,h)										!select side kp. from previous component
+    cskp,(h*100)+(j/n_cm-1),1,SIDE_POS(j/n_cm-1,4,h),SIDE_POS(j/n_cm,4,h),SIDE_POS(j/n_cm-1,5,h)		!creation of cyl. csys from 3kp (one less than number of components)
+    wpcsys,1,(h*100)+(j/n_cm-1)											!move WP to csys position
+    wprota,0,0,90												!WP rotation - z axis along branch
+    cswpla,(h*100)+(j/n_cm-1),1											!overwrite local cyl.csys (rotated - z axis along branch)
+    kdele,SIDE_POS(j/n_cm-1,4,h)										!delete kp at center of csys
+    ksel,u,kp,,SIDE_POS(j/n_cm,4,h)										!unselect kp at center of gravity	
+    *get,SIDE_POS(j/n_cm,6,h),kp,0,mxloc,x									!maximum diameter in element										!get kp at longest distance in x direction	
+    !*get,SIDE_POS(j/n_cm,7,h),kp,0,mnloc,x
+    wpcsys,1,0													!return WP to csys, 0
+    csys,0
+   *endif
+    !
+   *if,j,eq,i,and,j,eq,n_sel,then			!last component
+    ksel,a,kp,,SIDE_POS(j/n_cm,4,h)			!kp selection 	
+    kdele,SIDE_POS(j/n_cm,4,h)				!kp delete
+   *endif
+    !					
+  *enddo
+  *if,i/n_cm,eq,nint(i/n_cm),then			!if i/n_cm is whole number 
+   n_cm%h%=(i/n_cm)
+   *if,SIDE_POS(i/n_cm,6,h),gt,lim*SIDE_POS(2,6,h),exit
+  *endif
+ *enddo
+*enddo
+allsel,all
+!
+!--------assingment of esys and material numbers----------------------
+!
+*do,h,1,np_2
+ *do,i,1,n_cm%h%
+  *if,i,lt,n_cm%h%,then									!if round less than last
+   cmsel,s,elem_%h%_%i*n_cm%								!component selection
+   *if,esys,eq,0,then
+    emodif,all,esys,(h*100)+i								!modify esys number
+    emodif,all,mat,(h*100)+i
+   *endif
+  *else  
+   cmsel,s,elem_%h%_%i*n_cm%								!last component will have same properties as previous
+   *if,esys,eq,0,then
+    emodif,all,esys,(h*100)+(i-1)							!modify esys number
+    emodif,all,mat,(h*100)+(i-1)
+   *endif
+  *endif
+  !	
+ *enddo
+ !parsav,scalar,p1_%h%
+*enddo
+!
+allsel,all
+!
+save,side,db
+!/number,1				!plot colors only
+!/pnum,esys,1				!plot esys numbers
+!eplot
+!
+!-------------MAIN AXIS ASSINGMENT OF CSYS AND MAT PROPERTIES------------------------------
+!
+csys,0				!global csys
+wpcsys,1,0			!return WP to csys 0
+allsel,all			!select all
+!
+!
+!--setting of csys 11 and 10 000 (1e4) near branch base----
+!
+*get,k_minx,kp,0,mnloc,x	!get minimum kp coordinate
+*get,k_miny,kp,0,mnloc,y		
+*get,k_minz,kp,0,mnloc,z
+!
+wpoffs,k_minx,k_miny,k_minz	!offset WP to minimum coordinate
+wprota,0,-90,0			!rotation z axis along the branch
+cswpla,11,1			!defines cyl. sys. 11
+!
+!--setting of csys 1e4 first rotation of csys along branch---
+!
+ksel,s,loc,z,0,c_12a			!selection of 1st section branch base	
+ksum					
+*get,k1_centx,kp,0,cent,x		!get center of gravity  x,y,z
+*get,k1_centy,kp,0,cent,y
+*get,k1_centz,kp,0,cent,z
+!
+ksel,s,loc,z,c_12a,c_12b
+ksum					
+*get,k2_centx,kp,0,cent,x		!get center of gravity  of following point x,y,z
+*get,k2_centy,kp,0,cent,y		
+*get,k2_centz,kp,0,cent,z
+!
+csys,0					!global csys
+k_1a=kp(k1_centx,k1_centy,k1_centz)	!select kp near location (orientation of xy plane)
+k,,k1_centx,k1_centy,k1_centz		!create kp at center of gravity 1st part
+k_1=kp(k1_centx,k1_centy,k1_centz)	!select kp at center of gravity	1st part (origin of csys 12)
+k,,k2_centx,k2_centy,k2_centz		!create kp at center of gravity 2nd part
+k_2=kp(k2_centx,k2_centy,k2_centz)	!select kp at center of gravity 2nd part (orientation of x-axis)
+!
+bas_csys=1e4				!number of csys at branch base
+cskp,bas_csys,1,k_1,k_2,k_1a		!creation of first csys 1e4_main axis base
+wpcsys,1,bas_csys			!setting WP at csys 1e4
+wprota,0,0,90				!rotation Z - along branch
+cswpla,bas_csys,1			!creation of csys rotated
+wpcsys,1,bas_csys			!setting WP at csys 1e4 - rotated							
+kdele,k_1				!delete k_1 and k_2
+kdele,k_2
+allsel
+!
+*get,br_lenght,kp,0,mxloc,z		!length of branch from csys 1e4 (bas_csys)
+*get,kbase1e4,kp,0,mnloc,z		!position of lowest points in csys 1e4
+ksel,s,loc,z,0,-1
+*get,r_base1e4,kp,0,mxloc,x		!radius of branch base csys 1e4
+allsel,all
+!
+*set,kbase,kp(0,0,kbase1e4)		!k point at base of main axis branch
+n_height=3*(nint(br_lenght/e_size))   	!number of iterate along height
+!
+*dim,MAIN,array,n_height/na_sel,7,1
+!
+!----selection of components and coordinates for CSYS---------
+!
+csys,bas_csys
+ksel,s,kp,,kbase				!kp selection
+nslk,s						!node selection at kp position
+esln,s						!element selection at node position
+*do,i,1,n_height,1				!creation of components	
+ nsle,a						!selection of attached nodes
+ esln,a						!selection of attached elements
+ eplot						!plot elements
+  *do,j,0,n_height,na_sel			!at each n-th selection made component
+   *if,j,eq,i,and,j,eq,na_sel,then		!first component
+    esel,r,cent,x,0,r_base1e4+(r_base1e4*0.25)	!unselect el.in 1/2 of radius
+    cm,main_%j%,elem,1				!create component for part
+    cm,main,elem,1				!create component main for unselection	
+    ksln,s					!select kp attached to nodes
+    ksum					!kp sum for center of gravity - not possible for elements
+    *get,MAIN(j/na_sel,1,1),kp,0,cent,x		!get center of gravity x,y,z in csys 0
+    *get,MAIN(j/na_sel,2,1),kp,0,cent,y
+    *get,MAIN(j/na_sel,3,1),kp,0,cent,z
+    *get,MAIN(j/na_sel,6,1),kp,0,mxloc,x	!radius of branch base in cyl. csys 1e4
+    csys,0
+    k,kp_max+1e5+(j/na_sel),MAIN(j/na_sel,1,1),MAIN(j/na_sel,2,1),MAIN(j/na_sel,3,1)		!create kp in the centre of gravity
+    MAIN(j/na_sel,4,1)=kp_max+1e5+(j/na_sel)							!write kp num into the table
+    csys,bas_csys   
+    *get,MAIN(j/na_sel,7,1),kp,MAIN(j/na_sel,4,1),loc,z
+    csys,0
+    !
+    allsel,all
+    cmsel,s,main_%j%				!selec elements in component
+    nsle,s
+    !
+   *elseif,j,eq,i,and,j,gt,na_sel,then		 			!at next components
+    csys,bas_csys+(j/na_sel-2)			 			!csys of previous component
+    cmsel,u,main				 			!unselect assembly main
+    !esel,r,cent,x,0,(MAIN(j/na_sel-1,6,1)+(MAIN(j/na_sel-1,6,1)*0.1))	!unselect el.in 1/2 of radius
+    !esel,r,cent,z,(MAIN(j/na_sel-1,7,1)+(2*e_size)),10			
+    cmsel,u,side
+    cm,main_%j%,elem,1				 			!create component
+    !
+    nsle,s					!select nodes
+    ksln,s					!select kp 
+    ksum					
+    *get,MAIN(j/na_sel,1,1),kp,0,cent,x	!get center of gravity x,y,z
+    *get,MAIN(j/na_sel,2,1),kp,0,cent,y
+    *get,MAIN(j/na_sel,3,1),kp,0,cent,z 
+    *get,MAIN(j/na_sel,6,1),kp,0,mxloc,x	!radius of branch base csys 1e4
+    cmsel,s,main_%j%				!select elements component
+    cmsel,a,main				!add main component 
+    cm,main,elem,1				!create component main for unselection
+    !
+    *if,MAIN(j/na_sel,6,1),eq,0,cycle
+     csys,0
+     k,kp_max+1e5+(j/na_sel),MAIN(j/na_sel,1,1),MAIN(j/na_sel,2,1),MAIN(j/na_sel,3,1)			!create kp at centre of gravity 
+     MAIN(j/na_sel,4,1)=kp_max+1e5+(j/na_sel)								!write kp num into table
+     ksel,u,kp,,MAIN(j/na_sel,4,1)									!unselect kp in the midle of branch for selection of orient kp
+     *set,MAIN(j/na_sel-1,5,1),kp(MAIN(j/na_sel-1,1,1),MAIN(j/na_sel-1,2,1),MAIN(j/na_sel-1,3,1))	!select kpfor orientation of csys x axis
+     ksel,a,kp,,MAIN(j/na_sel-1,4,1),MAIN(j/na_sel,4,1)							!add kp in centre to the selection
+     !
+     cskp,bas_csys+(j/na_sel-1),1,MAIN(j/na_sel-1,4,1),MAIN(j/na_sel,4,1),MAIN(j/na_sel-1,5,1)		!creation of csys from 3kp (one less than number of components)
+     wpcsys,1,bas_csys+(j/na_sel-1)
+     wprota,0,0,90
+     cswpla,bas_csys+(j/na_sel-1),1
+     *get,MAIN(j/na_sel,7,1),kp,MAIN(j/na_sel,4,1),loc,z
+     wpcsys,1,0
+     csys,0
+     kdele,MAIN(j/na_sel-1,4,1)
+     !
+     allsel,all
+     cmsel,s,main_%j%				!select elements in component
+     nsle,s
+     !
+   *endif
+  *enddo
+   *if,i/na_sel,eq,nint(i/na_sel),then	
+    n_nafin=i/na_sel				!number of components in main branches
+     *if,MAIN(n_nafin,6,1),eq,0,exit
+   *endif
+ !parsav,scalar,p2_%i%
+*enddo
+allsel,all
+save,main,db
+!
+n_main=n_nafin-1
+*do,i,1,n_main
+  *if,i,lt,n_main,then
+   cmsel,s,main_%i*na_sel%									!component selection
+   emodif,all,esys,bas_csys+i									!modify esys number
+   emodif,all,mat,bas_csys+i
+  *else  
+   cmsel,s,main_%i*na_sel%
+   emodif,all,esys,bas_csys+(i-1)								!modify esys number
+   emodif,all,mat,bas_csys+(i-1)
+  *endif	
+ !parsav,scalar,p2_%i%
+*enddo
+!
+allsel,all
+!
+!
+csys,0							!global csys
+allsel,all						!select all	
+!
+!--------------UPLOAD VALUES FOR EACH DEFINED MATERIAL MODEL------------------
+!
+!--------------side branches
+*do,h,1,np_2				!cycle for each side branch
+ *do,i,1,n_cm%h%			!cycle for number of components in side branch			
+  mp,ez,(h*100)+i,e_lz*m_kof		!orthotropic mat.model defined in param.mac								
+  mp,ex,(h*100)+i,e_rx*m_kof		!m_kof coefficient for reduction of material properties for side branches if needed		
+  mp,ey,(h*100)+i,e_ty*m_kof
+  !
+  mp,gxy,(h*100)+i,g_xy*m_kof
+  mp,gyz,(h*100)+i,g_yz*m_kof
+  mp,gxz,(h*100)+i,g_xz*m_kof
+  !
+  mp,nuxy,(h*100)+i,nu_xy
+  mp,nuyz,(h*100)+i,nu_yz
+  mp,nuxz,(h*100)+i,nu_xz
+  !
+  !mp,prxy,(h*100)+i,pr_xy			
+  !mp,pryz,(h*100)+i,pr_yz
+  !mp,prxz,(h*100)+i,pr_xz
+  !
+  mp,dens,(h*100)+i,dens_w*m_kof	
+ *enddo
+*enddo
+!
+allsel,all
+!
+!------------main branch
+*do,i,1,n_main				!cycle for number of components in main branch		
+ mp,ez,1e4+i,e_lz			!orthotropic mat.model defined in param.mac							
+ mp,ex,1e4+i,e_rx				
+ mp,ey,1e4+i,e_ty
+ !
+ mp,gxy,1e4+i,g_xy
+ mp,gyz,1e4+i,g_yz
+ mp,gxz,1e4+i,g_xz
+ !
+ mp,nuxy,1e4+i,nu_xy
+ mp,nuyz,1e4+i,nu_yz
+ mp,nuxz,1e4+i,nu_xz
+ !
+ !mp,prxy,1e4+i,pr_xy			
+ !mp,pryz,1e4+i,pr_yz
+ !mp,prxz,1e4+i,pr_xz
+ !
+ mp,dens,1e4+i,dens_w		
+*enddo
+!
+allsel,all
+!
+!*****************check if all elements have defined esys
+!esel,u,esys,,1,50000						!check of assignmented properties
+!emodif,all,esys,10003						!add chosen csys if there is no added to elements
+!emodif,all,mat,10003	
+!allsel,all
+!
+save,main_all,db
+!
+!pick_load.mac
+!next file pick_load.mac - GUI NEEDED
+!
+/eof

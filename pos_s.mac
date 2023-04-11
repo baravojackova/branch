@@ -1,0 +1,9 @@
+!results branch beam model
+!=========================
+!-----write positions of side branches
+!
+*cfopen,%br_num%_beam_pozs00%lo_ad%,txt
+ *vwrite,sequ,poz_side(1,1),poz_side(1,2),poz_side(1,3),poz_side(1,4),poz_side(1,5),poz_side(1,6),poz_side(1,7),poz_side(1,8),poz_side(1,9),
+ (F5.0,' ',F,' ',F,' ',F,' ',F,' ',F,' ',F,' ',F,' ',F,' ',F) 
+*cfclose
+!

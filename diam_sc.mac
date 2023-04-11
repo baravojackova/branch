@@ -1,0 +1,7 @@
+!extract diameters from scan-based solid model
+!=============================================
+!
+*cfopen,diameters_sc,txt
+  *vwrite,sequ,FORCE_DIAM(1,1),FORCE_DIAM(1,2),FORCE_DIAM(1,3),FORCE_DIAM(1,4),
+  (F5.0,' ',F,' ',F,' ',F,' ',F,) 
+*cfclose

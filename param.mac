@@ -1,0 +1,118 @@
+!=======Branches definition of input parameters for scan and beams (no GUI needed) [Pa,N,m,kg/m3]============
+!
+/prep7
+keyw,PR_SGVOF,1 				!context filtering for GUI - stop displaying verify messages
+/nerr,5,10000, ,0,5,				!limit the number of warnings to be displayed
+!
+!-----01_MESH.MAC AND 06_BEAM.MAC MESHING---------
+!
+*afun,rad   	
+*set,pi,2*asin(1)   		!pi calculation 
+*afun,deg   			!use degrees for functions
+!
+br_num=04			!branch number
+bark=0.003			!beam model bark thickness overall,each side 0.0015 - main axis
+barks=0.001			!beam model bark thickness overall, each side 0.0005 - side branches 
+*set,n,18			!number of points along main axis - equal to number of rows in dim_main.mac
+!
+*set,e_size,0.005		!element size for scan-based solid model
+*set,e_sizn,0.001		!element size for main axis of beam model
+*set,e_sizs,0.001		!element size for side branches of beam model
+!
+-----02_PICK.MAC SELECTION FOR ASSIGNMENTS OF PROPERTIES-----------
+
+*set,np,20			!number of picking operation for creation of LCSYS and assignments of ESYS and material numbers >
+				!should be higher than number of side branches  (input to pick.mac)
+*set,ns,15			!number of side branches for selection of points with side branches loading (input to pick_load.mac)
+!				!equal to number of side branches in beam model (same as number of row is side.mac)
+!-----03_SCAN.MAC_SETTING OF PARAMETERS FOR SECTION SELECTION - CSYS ASSIGNMENT----------------
+!
+*set,c_12a,0.05			!selection of 1st csys 1e4_1st center of gravity
+*set,c_12b,0.1			!selection of 1st csys 1e4_2nd center of gravity
+*set,n_sel,150			!selection of elements	
+*set,n_cm,5			!number of selection in one component, when higher than 5 the if exit is not working well
+*set,na_sel,10			!segment height of main axis_lower edge
+*set,lim,3			!limitation for cycle stop of branch selection (lim*branch diameter),depends on branch geometry, can be changed
+!
+!Final file main_all.db has to be checked - if there are no elements without defined ESYS and transitions between the main axis and side branches
+!the some of the above parameters (n_sel,n_cm,na_sel,lim) can be changed if needed
+!
+!------MATERIAL MODEL SCAN-----------------------------
+!
+dens_w=890						!data from densitometry
+e_lz=4.658e9*0.6					!EL_measurement and derived for scan-based solid geometry
+!
+e_rx=e_lz*0.066						!ER/EL Elastic ratios from [1]
+e_ty=e_lz*0.027						!ET/EL 
+!
+g_xy=e_lz*0.02						!GRT/EL	
+g_yz=e_lz*0.046						!GLT/EL
+g_xz=e_lz*0.056						!GLR/EL 
+!
+pr_xy=0.912						!URT major; only minors are needed usually
+pr_yz=0.406						!ULT major 
+pr_xz=0.364						!ULR major
+!
+nu_xy=0.346						!UTR minor  
+nu_yz=0.022						!UTL minor  
+nu_xz=0.034						!URL minor 
+!
+m_kof=1							!coefficient for reduction of material properties on side branches
+!
+!----06_BEAM.MAC BEAM MODEL---------------------------
+e_lx_b=4.658e9*0.9					!EL_measurement and derived for beam geometry, where x axis is defaultly along the longitudinal direction of beam
+g_xy_b=e_lx_b*0.056					!GLR/EL Elastic ratios from [1]
+pr_xy_b=0.364						!URL major; only major or minors are needed
+nu_xy_b=0.034						!URL minor
+!
+m_kof_b=1						!coefficient for reduction of material properties on side branches
+!-------05_CALC.MAC AND 06_BEAM.MAC FOR BOUNDARY CONDITIONS--------
+!
+scan_only=1						!1 - if use manually selected positions for loading of side branches
+!							!2 - if use extracted diameters 
+n_diam=4						!select which extracted diameter use for distribution in scenario 6 and 8 >
+							! > n_diam=3 - top of side branch, n_diam=4 - 2nd component form top
+F_h=4.94*9.81						!pulling force - side	
+F_v=4.94*9.81						!pulling force - gravity
+alfa=79							!angle of branch tilt; angle and position of 1st branch define position of RSYS (position is defined in side.mac (1,1) 
+beta=7							!angle of whole branch rotation caused by tilt of the holder,measured form figure or fitted to experimental data
+beta_b=2						!for beams - different value is caused different selection of observed resulted nodes
+!
+gr_dist=29/1000						!distance of center of gravity from nearest branch_measured from figure
+gr_dist_b=0						!distance of center of gravity from closest marker_measured from figure
+n_mg=12							!number of marker closest to the center of gravity							
+an_dis=60.5/1000					!distance of center of anchorage from branch nearest to the base_meassured from figure
+an_dis1=60.5/1000					!distance of upper edge of first marker - usually equal to tape wide 35 mm; it can be used when position of first marker is different from anchorage
+gr_csys=10039						!csys near center of gravity for selection of points near the load application; has to be changed after pick_load.mac
+!
+!
+!displacement of anchorage - HORIZONTAL displacement and rotation of holder
+u_y=25.2253/1000
+u_x=5.3830/1000					
+rot_z=0.0958				!rotation calculated from movement of 1st and 2nd marker
+u_z=0
+rot_x=0
+rot_y=0
+!
+!displacement of anchorage - VERTICAL displacement and rotation of holder
+u_z_v=7.8552/1000
+u_x_v=-0.5899/1000
+u_y_v=0		!
+!displacement of first marker for rotation
+rot_y_v=0.0622
+rot_x_v=0
+rot_z_v=0
+!
+!loading of side branches properties
+*dim,side_par,table,ns,11,1,ps,palfaslmlsdsfp		!create table
+*tread,side_par,side_par,mac,,1					!read table
+!
+!loading of table with diameters at markers position for definition of main axis
+!used only only in BEAM.MAC
+*dim,diam_main,table,n,6,1,m,dhdvmrot			!create table
+*tread,diam_main,diam_main,mac,,1	
+!
+/eof
+!
+![1]Senalik, A.C., Farber B.,2021, Mechanical Properties of Wood - Chapter 5 in: Wood Handbook - wood as an engineering material. General Technical Report FPL-GTR-282. 
+!Madison, WI: U.S: Department of Agriculture, Forest Service, Forst Products Laboratory. 543 p. 

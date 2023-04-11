@@ -1,0 +1,56 @@
+/pmacro
+!02 PICK  Branch - scan-based solid model, picking operations (GUI needed) [Pa,N,m,kg/m3]
+!=======================================================================================
+!selection of points on the end of branches for assignment of esys and material properties
+!can be used also for automatic selection of side loads  -scenario 6 and 8
+!
+!1. select of points at the end of side branches
+!2. select side branches for unselection -> the main axis will be defined according the remaining shape 
+!
+!------------------loading meshed file db
+!
+resume,'scanmeshed','db',,0,0  		!resume meshed branch from file
+eplot										!plot elements
+!
+param.mac				!loading of parameters
+/wait,2
+!
+!----side branches selection for mat properties
+!
+kplot
+*dim,SIDE,array,np,2,1								!create array with kp numbers
+*do,i,1,np
+ ksel,s,p			 						!interactive kp selection
+ !										!select step-by-step k-points at the top of side branches
+ *get,SIDE(i,1,1),kp,0,num,min							!kp number to array SIDE
+  *ask,end_do,select top of side branches (write 1 if you want to end cycle),0	!ask - if you want stop cycle write 1
+  np_2=i  									!number of selections 
+  allsel,all  
+ *if,end_do,eq,1,exit								!end of picking				
+*enddo
+!
+!-------selection of side branches for unselection
+allsel,all
+eplot
+!
+*do,i,1,np
+ *if,i,eq,1,then
+  esel,s,p									!select 1st side branch by polygon
+  cm,side,elem,1								!create component
+  *else
+   allsel,all
+   esel,s,p										!select step-by-step side branches by polygon 
+   cmsel,a,side										!add component selection
+   cm,side,elem,1			 						!create new component with selection
+  *endif
+  *ask,end_do,select branches for unselection (write 1 if you want to end cycle),0	!ask - if you want stop cycle write 1
+  *if,end_do,eq,1,exit									!end of picking				
+*enddo
+!
+save,main_cm,db										!save file main_cm.db
+!
+!scan.mac
+!next file scan.mac - to save time use batch mode (no GUI)
+/eof
+
+
